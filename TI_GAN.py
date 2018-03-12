@@ -12,14 +12,16 @@ batch_size = 128
 learning_rate = 2e-4
 training_step = 1000*3
 display_step = 100
+data_dir = "/home/ziyi/code/data/"
 
 # Network Parameters
 image_dim = 784
 noise_dim = 64
-desired_calss = [0,8]
+desired_calss = [8, 3]
 
-mnist0 = dataset.read_data_sets("/home/ziyi/code/data/", target_class=desired_calss[0], one_hot=False)
-mnist1 = dataset.read_data_sets("/home/ziyi/code/data/", target_class=desired_calss[1], one_hot=False)
+mnist0 = dataset.read_data_sets(data_dir, target_class=desired_calss[0], one_hot=False)
+mnist1 = dataset.read_data_sets(data_dir, target_class=desired_calss[1], one_hot=False)
+
 
 # Generator Network
 def generator(x, scoop_name="Generator", reuse=False):
@@ -53,63 +55,54 @@ def discriminator(x, scoop_name="Discriminator", reuse=False):
 
         return out
 
+
+def operations(noise, image_input, disc_t, gen_t, index):
+    gen_scoop = "Generator"+index
+    disc_scoop = "Discriminator"+index
+
+    # Build Gen & Disc Net
+    gen_sample = generator(noise, scoop_name=gen_scoop)
+    disc_real_out = discriminator(image_input, scoop_name=disc_scoop)
+    disc_fake_out = discriminator(gen_sample, scoop_name=disc_scoop, reuse=True)
+    disc_concat = tf.concat([disc_real_out, disc_fake_out], axis=0)
+
+    stacked_gan = discriminator(gen_sample, scoop_name=disc_scoop, reuse=True)
+
+    # Loss Definition
+    disc_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+        labels=disc_t, logits=disc_concat))
+    gen_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+        labels=gen_t, logits=stacked_gan))
+    tf.summary.scalar(tensor=disc_loss_op, name=disc_scoop+" Loss")
+    tf.summary.scalar(tensor=gen_loss_op, name=gen_scoop+" Loss")
+
+    # Optimizer Definition
+    optimizer_gen = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    optimizer_disc = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    # Related variables for two parts
+    gen_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=gen_scoop)
+    disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=disc_scoop)
+    # Trainer in minimizing loss
+    gen_train = optimizer_gen.minimize(gen_loss_op, var_list=gen_vars)
+    disc_train = optimizer_disc.minimize(disc_loss_op, var_list=disc_vars)
+
+    return gen_sample, gen_train, disc_train, gen_loss_op, disc_loss_op
+
+
 # Graph Input
 gen_input = tf.placeholder(tf.float32, [None, noise_dim])
 real_image_input0 = tf.placeholder(tf.float32, [None, 28, 28, 1])
 real_image_input1 = tf.placeholder(tf.float32, [None, 28, 28, 1])
-
-# Build Gen & Disc Net
-gen_sample0 = generator(gen_input, scoop_name="Generator0")
-gen_sample1 = generator(gen_input, scoop_name="Generator1")
-
-disc_real_out0 = discriminator(real_image_input0, scoop_name="Discriminator0")
-disc_fake_out0 = discriminator(gen_sample0, scoop_name="Discriminator0", reuse=True)
-disc_concat0 = tf.concat([disc_real_out0, disc_fake_out0], axis=0)
-
-disc_real_out1 = discriminator(real_image_input1, scoop_name="Discriminator1")
-disc_fake_out1 = discriminator(gen_sample1, scoop_name="Discriminator1", reuse=True)
-disc_concat1 = tf.concat([disc_real_out1, disc_fake_out1], axis=0)
-
-stacked_gan0 = discriminator(gen_sample0, scoop_name="Discriminator0", reuse=True)
-stacked_gan1 = discriminator(gen_sample1, scoop_name="Discriminator1", reuse=True)
-
 # Targets Input
 disc_target = tf.placeholder(tf.int32, shape=[None])
 gen_target = tf.placeholder(tf.int32, shape=[None])
 
-# Loss Definition
-disc_loss_op0 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-        labels=disc_target, logits=disc_concat0))
-gen_loss_op0 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-        labels=gen_target, logits=stacked_gan0))
-tf.summary.scalar(tensor=disc_loss_op0, name="Discriminator0 Loss")
-tf.summary.scalar(tensor=gen_loss_op0, name="Generator0 Loss")
+gen_sample0, gen_train0, disc_train0, gen_loss_op0, disc_loss_op0 = \
+    operations(gen_input, real_image_input0, disc_target, gen_target, index="0")
 
-disc_loss_op1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-        labels=disc_target, logits=disc_concat1))
-gen_loss_op1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-        labels=gen_target, logits=stacked_gan1))
-tf.summary.scalar(tensor=disc_loss_op1, name="Discriminator1 Loss")
-tf.summary.scalar(tensor=gen_loss_op1, name="Generator1 Loss")
+gen_sample1, gen_train1, disc_train1, gen_loss_op1, disc_loss_op1 = \
+    operations(gen_input, real_image_input1, disc_target, gen_target, index="1")
 
-
-# Optimizer Definition
-optimizer_gen0 = tf.train.AdamOptimizer(learning_rate=learning_rate)
-optimizer_disc0 = tf.train.AdamOptimizer(learning_rate=learning_rate)
-optimizer_gen1 = tf.train.AdamOptimizer(learning_rate=learning_rate)
-optimizer_disc1 = tf.train.AdamOptimizer(learning_rate=learning_rate)
-
-# Related variables for two parts
-gen_vars0 = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator0")
-disc_vars0 = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Discriminator0")
-gen_vars1 = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator1")
-disc_vars1 = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Discriminator1")
-
-# Trainer in minimizing loss
-gen_train0 = optimizer_gen0.minimize(gen_loss_op0, var_list=gen_vars0)
-disc_train0 = optimizer_gen0.minimize(disc_loss_op0, var_list=disc_vars0)
-gen_train1 = optimizer_gen1.minimize(gen_loss_op1, var_list=gen_vars1)
-disc_train1 = optimizer_gen1.minimize(disc_loss_op1, var_list=disc_vars1)
 
 merged = tf.summary.merge_all()
 history_writer = tf.summary.FileWriter("/home/ziyi/code/data/TI_GAN")
@@ -122,12 +115,9 @@ with tf.Session() as sess:
         # Sample data for Disc and Gen
         batch_x0, _ = mnist0.train.next_batch(batch_size)
         batch_x1, _ = mnist1.train.next_batch(batch_size)
-        # batch_x = -1. + batch_x / 2.
-        # batch_x = batch_x.eval(session=sess)
-        # print(type(batch_x))
         batch_x0 = np.reshape(batch_x0, [-1, 28, 28, 1])
         batch_x1 = np.reshape(batch_x1, [-1, 28, 28, 1])
-        z = np.random.normal(0., 0.3, size=[batch_size, noise_dim])
+        z = np.random.normal(0., 0.2, size=[batch_size, noise_dim])
         # z = uniform(0., 1., size=[batch_size, noise_dim])
 
         # Sample labels for Disc
@@ -152,8 +142,8 @@ with tf.Session() as sess:
     for i in range(5):
         # Noise input.
         # z = np.random.uniform(-1., 1., size=[4, noise_dim])
-        z = np.random.normal(0., 0.3, size=[4, noise_dim])
-        if i<3:
+        z = np.random.normal(0., 0.2, size=[4, noise_dim])
+        if i<2:
             g = sess.run([gen_sample0], feed_dict={gen_input: z})
         else:
             g = sess.run([gen_sample1], feed_dict={gen_input: z})
