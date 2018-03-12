@@ -10,14 +10,14 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 # Hyper Parameters
 batch_size = 128
 learning_rate = 2e-4
-training_step = 1000*3
+training_step = 1000*5
 display_step = 100
 data_dir = "/home/ziyi/code/data/"
 
 # Network Parameters
 image_dim = 784
 noise_dim = 64
-desired_calss = [8, 3]
+desired_calss = [0, 6]
 
 mnist0 = dataset.read_data_sets(data_dir, target_class=desired_calss[0], one_hot=False)
 mnist1 = dataset.read_data_sets(data_dir, target_class=desired_calss[1], one_hot=False)
@@ -56,7 +56,7 @@ def discriminator(x, scoop_name="Discriminator", reuse=False):
         return out
 
 
-def operations(noise, image_input, disc_t, gen_t, index):
+def train_operations(noise, image_input, disc_t, gen_t, index):
     gen_scoop = "Generator"+index
     disc_scoop = "Discriminator"+index
 
@@ -77,14 +77,13 @@ def operations(noise, image_input, disc_t, gen_t, index):
     tf.summary.scalar(tensor=gen_loss_op, name=gen_scoop+" Loss")
 
     # Optimizer Definition
-    optimizer_gen = tf.train.AdamOptimizer(learning_rate=learning_rate)
-    optimizer_disc = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
     # Related variables for two parts
     gen_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=gen_scoop)
     disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=disc_scoop)
     # Trainer in minimizing loss
-    gen_train = optimizer_gen.minimize(gen_loss_op, var_list=gen_vars)
-    disc_train = optimizer_disc.minimize(disc_loss_op, var_list=disc_vars)
+    gen_train = optimizer.minimize(gen_loss_op, var_list=gen_vars)
+    disc_train = optimizer.minimize(disc_loss_op, var_list=disc_vars)
 
     return gen_sample, gen_train, disc_train, gen_loss_op, disc_loss_op
 
@@ -98,10 +97,10 @@ disc_target = tf.placeholder(tf.int32, shape=[None])
 gen_target = tf.placeholder(tf.int32, shape=[None])
 
 gen_sample0, gen_train0, disc_train0, gen_loss_op0, disc_loss_op0 = \
-    operations(gen_input, real_image_input0, disc_target, gen_target, index="0")
+    train_operations(gen_input, real_image_input0, disc_target, gen_target, index="0")
 
 gen_sample1, gen_train1, disc_train1, gen_loss_op1, disc_loss_op1 = \
-    operations(gen_input, real_image_input1, disc_target, gen_target, index="1")
+    train_operations(gen_input, real_image_input1, disc_target, gen_target, index="1")
 
 
 merged = tf.summary.merge_all()
@@ -117,7 +116,7 @@ with tf.Session() as sess:
         batch_x1, _ = mnist1.train.next_batch(batch_size)
         batch_x0 = np.reshape(batch_x0, [-1, 28, 28, 1])
         batch_x1 = np.reshape(batch_x1, [-1, 28, 28, 1])
-        z = np.random.normal(0., 0.2, size=[batch_size, noise_dim])
+        z = np.random.normal(0., 0.3, size=[batch_size, noise_dim])
         # z = uniform(0., 1., size=[batch_size, noise_dim])
 
         # Sample labels for Disc
@@ -126,15 +125,14 @@ with tf.Session() as sess:
 
         feed_dict = {gen_input: z, real_image_input0: batch_x0, real_image_input1: batch_x1,
                      disc_target: batch_disc_y, gen_target: batch_gen_y}
-        operations = [merged, gen_train0, disc_train0, gen_loss_op0, disc_loss_op0,
-                      gen_train1, disc_train1, gen_loss_op1, disc_loss_op1]
-        summary, _, _, gl0, dl0, _, _, gl1, dl1 = sess.run(operations, feed_dict=feed_dict)
+        ops = [merged, gen_train0, disc_train0, gen_loss_op0, disc_loss_op0,
+               gen_train1, disc_train1, gen_loss_op1, disc_loss_op1]
+        summary, _, _, gl0, dl0, _, _, gl1, dl1 = sess.run(ops, feed_dict=feed_dict)
 
         if idx % display_step == 0:
             history_writer.add_summary(summary, idx)
-            print("Step: {:5d}, Gen_Loss0: {:8f}, Disc_Loss0: {:8f},"
-                  "Gen_Loss1: {:8f}, Disc_Loss1: {:8f}".format(
-                idx, gl0, dl0, gl1, dl1))
+            print("Step: {:5d}, Gen_Loss0: {:8f}, Disc_Loss0: {:8f}, "
+                  "Gen_Loss1: {:8f}, Disc_Loss1: {:8f}".format(idx, gl0, dl0, gl1, dl1))
     history_writer.close()
 
     # Generate images from noise, using the generator network.
@@ -142,13 +140,12 @@ with tf.Session() as sess:
     for i in range(5):
         # Noise input.
         # z = np.random.uniform(-1., 1., size=[4, noise_dim])
-        z = np.random.normal(0., 0.2, size=[4, noise_dim])
+        z = np.random.normal(0., 0.3, size=[4, noise_dim])
         if i<2:
             g = sess.run([gen_sample0], feed_dict={gen_input: z})
         else:
             g = sess.run([gen_sample1], feed_dict={gen_input: z})
 
-        # g = [(x + 1.)/2. for x in g]
         g = np.reshape(g, newshape=(4, 28, 28, 1))
         # Reverse colours for better display
         # g = -1 * (g - 1)
