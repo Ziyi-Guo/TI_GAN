@@ -17,7 +17,7 @@ data_dir = "/home/ziyi/code/data/"
 # Network Parameters
 image_dim = 784
 noise_dim = 64
-desired_calss = [0, 6]
+desired_calss = [1, 7]
 
 # Data Feed
 mnist0 = dataset.read_data_sets(data_dir, target_class=desired_calss[0], one_hot=False)
@@ -30,7 +30,9 @@ real_image_input1 = tf.placeholder(tf.float32, [None, 28, 28, 1])
 # Targets Input
 disc_target = tf.placeholder(tf.int32, shape=[None])
 gen_target = tf.placeholder(tf.int32, shape=[None])
-cross_gen_target = tf.placeholder(tf.int32, shape=[None])
+
+disc_target_all = tf.placeholder(tf.int32, shape=[None])
+disc_target_gen = tf.placeholder(tf.int32, shape=[None])
 
 # All operations defined on variables
 gen_sample0, gen_train0, disc_train0, gen_loss_op0, disc_loss_op0 = \
@@ -40,7 +42,8 @@ gen_sample1, gen_train1, disc_train1, gen_loss_op1, disc_loss_op1 = \
     train_operations(gen_input, real_image_input1, disc_target, gen_target, index="1")
 
 cross_gen_loss, cross_disc_loss, cross_gen_train, cross_disc_train = \
-    cross_class_operations(gen_sample0, image_input_diff=real_image_input1, target_disc=disc_target, target_gen=cross_gen_target, gen_index="0")
+    cross_class_operations(gen_sample0, gen_sample1, real_image_input0,
+                           real_image_input1, disc_target_all, disc_target_gen)
 
 merged = tf.summary.merge_all()
 history_writer = tf.summary.FileWriter("/home/ziyi/code/data/TI_GAN")
@@ -61,12 +64,16 @@ with tf.Session(config=config) as sess:
         # z = uniform(0., 1., size=[batch_size, noise_dim])
 
         # Sample labels for Disc
-        batch_cross_y = np.ones([batch_size])
         batch_gen_y = np.ones([batch_size])
         batch_disc_y = np.concatenate([np.ones([batch_size]), np.zeros([batch_size])], axis=0)
+        batch_disc_gen = np.concatenate([np.ones([batch_size]), np.zeros([batch_size])], axis=0)
+        batch_disc_all = np.concatenate([np.zeros([batch_size*2]), np.ones([batch_size*2])], axis=0)
 
-        feed_dict = {gen_input: z, real_image_input0: batch_x0, real_image_input1: batch_x1,
-                     disc_target: batch_disc_y, gen_target: batch_gen_y, cross_gen_target: batch_cross_y}
+        feed_dict = {
+            gen_input: z, real_image_input0: batch_x0, real_image_input1: batch_x1,
+            disc_target: batch_disc_y, gen_target: batch_gen_y,
+            disc_target_all: batch_disc_all, disc_target_gen: batch_disc_gen
+                     }
         ops = [merged, gen_train0, disc_train0, gen_loss_op0, disc_loss_op0,
                gen_train1, disc_train1, gen_loss_op1, disc_loss_op1,
                cross_gen_loss, cross_disc_loss, cross_gen_train, cross_disc_train]
