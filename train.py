@@ -17,8 +17,9 @@ data_dir = "/home/ziyi/code/data/"
 # Network Parameters
 image_dim = 784
 noise_dim = 64
-desired_calss = [7, 4]
+desired_calss = [0, 6]
 
+# Data Feed
 mnist0 = dataset.read_data_sets(data_dir, target_class=desired_calss[0], one_hot=False)
 mnist1 = dataset.read_data_sets(data_dir, target_class=desired_calss[1], one_hot=False)
 
@@ -29,19 +30,25 @@ real_image_input1 = tf.placeholder(tf.float32, [None, 28, 28, 1])
 # Targets Input
 disc_target = tf.placeholder(tf.int32, shape=[None])
 gen_target = tf.placeholder(tf.int32, shape=[None])
+cross_gen_target = tf.placeholder(tf.int32, shape=[None])
 
+# All operations defined on variables
 gen_sample0, gen_train0, disc_train0, gen_loss_op0, disc_loss_op0 = \
     train_operations(gen_input, real_image_input0, disc_target, gen_target, index="0")
 
 gen_sample1, gen_train1, disc_train1, gen_loss_op1, disc_loss_op1 = \
     train_operations(gen_input, real_image_input1, disc_target, gen_target, index="1")
 
+cross_gen_loss, cross_disc_loss, cross_gen_train, cross_disc_train = \
+    cross_class_operations(gen_sample0, image_input_diff=real_image_input1, target_disc=disc_target, target_gen=cross_gen_target, gen_index="0")
 
 merged = tf.summary.merge_all()
 history_writer = tf.summary.FileWriter("/home/ziyi/code/data/TI_GAN")
 init = tf.global_variables_initializer()
 
-with tf.Session() as sess:
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+with tf.Session(config=config) as sess:
     sess.run(init)
 
     for idx in range(training_step):
@@ -54,40 +61,43 @@ with tf.Session() as sess:
         # z = uniform(0., 1., size=[batch_size, noise_dim])
 
         # Sample labels for Disc
+        batch_cross_y = np.ones([batch_size])
         batch_gen_y = np.ones([batch_size])
         batch_disc_y = np.concatenate([np.ones([batch_size]), np.zeros([batch_size])], axis=0)
 
         feed_dict = {gen_input: z, real_image_input0: batch_x0, real_image_input1: batch_x1,
-                     disc_target: batch_disc_y, gen_target: batch_gen_y}
+                     disc_target: batch_disc_y, gen_target: batch_gen_y, cross_gen_target: batch_cross_y}
         ops = [merged, gen_train0, disc_train0, gen_loss_op0, disc_loss_op0,
-               gen_train1, disc_train1, gen_loss_op1, disc_loss_op1]
-        summary, _, _, gl0, dl0, _, _, gl1, dl1 = sess.run(ops, feed_dict=feed_dict)
+               gen_train1, disc_train1, gen_loss_op1, disc_loss_op1,
+               cross_gen_loss, cross_disc_loss, cross_gen_train, cross_disc_train]
+        summary, _, _, gl0, dl0, _, _, gl1, dl1, cgl, cdl, _, _ = sess.run(ops, feed_dict=feed_dict)
 
         if idx % display_step == 0:
             history_writer.add_summary(summary, idx)
-            print("Step: {:5d}, Gen_Loss0: {:8f}, Disc_Loss0: {:8f}, "
-                  "Gen_Loss1: {:8f}, Disc_Loss1: {:8f}".format(idx, gl0, dl0, gl1, dl1))
+            print("Step: {:5d}, GL0: {:6f}, DL0: {:6f}, "
+                  "GL1: {:6f}, DL1: {:6f}, "
+                  "CGL: {:6f}, CDL: {:6f}".format(idx, gl0, dl0, gl1, dl1, cgl, cdl))
     history_writer.close()
 
     # Generate images from noise, using the generator network.
     f, a = plt.subplots(4, 5, figsize=(5, 4))
-    for i in range(5):
+    for i in range(4):
         # Noise input.
         # z = np.random.uniform(-1., 1., size=[4, noise_dim])
-        z = np.random.normal(0., 0.3, size=[4, noise_dim])
-        if i<2:
+        z = np.random.normal(0., 0.3, size=[5, noise_dim])
+        if i < 2:
             g = sess.run([gen_sample0], feed_dict={gen_input: z})
         else:
             g = sess.run([gen_sample1], feed_dict={gen_input: z})
 
-        g = np.reshape(g, newshape=(4, 28, 28, 1))
+        g = np.reshape(g, newshape=(5, 28, 28, 1))
         # Reverse colours for better display
         # g = -1 * (g - 1)
-        for j in range(4):
+        for j in range(5):
             # Generate image from noise. Extend to 3 channels for matplot figure.
             img = np.reshape(np.repeat(g[j][:, :, np.newaxis], 3, axis=2),
                              newshape=(28, 28, 3))
-            a[j][i].imshow(img)
+            a[i][j].imshow(img)
 
     f.show()
     plt.draw()

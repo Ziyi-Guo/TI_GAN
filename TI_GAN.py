@@ -1,8 +1,5 @@
 import tensorflow as tf
 
-# Hyper Parameters
-learning_rate = 2e-4
-
 
 # Generator Network
 def generator(x, scoop_name="Generator", reuse=False):
@@ -37,17 +34,17 @@ def discriminator(x, scoop_name="Discriminator", reuse=False):
         return out
 
 
-def train_operations(noise, image_input, disc_t, gen_t, index):
+# Defining GAN and Operations
+def train_operations(noise, image_input, disc_t, gen_t, index, lr=2e-4):
     gen_scoop = "Generator"+index
     disc_scoop = "Discriminator"+index
 
     # Build Gen & Disc Net
     gen_sample = generator(noise, scoop_name=gen_scoop)
     disc_real_out = discriminator(image_input, scoop_name=disc_scoop)
-    disc_fake_out = discriminator(gen_sample, scoop_name=disc_scoop, reuse=True)
-    disc_concat = tf.concat([disc_real_out, disc_fake_out], axis=0)
-
     stacked_gan = discriminator(gen_sample, scoop_name=disc_scoop, reuse=True)
+    disc_concat = tf.concat([disc_real_out, stacked_gan], axis=0)
+
 
     # Loss Definition
     disc_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
@@ -58,7 +55,7 @@ def train_operations(noise, image_input, disc_t, gen_t, index):
     tf.summary.scalar(tensor=gen_loss_op, name=gen_scoop+" Loss")
 
     # Optimizer Definition
-    optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
+    optimizer = tf.train.AdamOptimizer(learning_rate=lr)
     # Related variables for two parts
     gen_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=gen_scoop)
     disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=disc_scoop)
@@ -67,3 +64,27 @@ def train_operations(noise, image_input, disc_t, gen_t, index):
     disc_train = optimizer.minimize(disc_loss_op, var_list=disc_vars)
 
     return gen_sample, gen_train, disc_train, gen_loss_op, disc_loss_op
+
+
+def cross_class_operations(gen_sample, image_input_diff, target_disc, target_gen, gen_index, lr=2e-4):
+    disc_scoop = "Discriminator_Cross"
+    disc_real_out = discriminator(image_input_diff, scoop_name=disc_scoop)
+    stacked_gan = discriminator(gen_sample, scoop_name=disc_scoop, reuse=True)
+    disc_concat = tf.concat([disc_real_out, stacked_gan], axis=0)
+    # Loss Definition
+    gen_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+        labels=target_gen, logits=stacked_gan))
+    disc_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+        labels=target_disc, logits=disc_concat))
+    tf.summary.scalar(tensor=gen_loss_op, name="Generator Cross Loss")
+    tf.summary.scalar(tensor=disc_loss_op, name=disc_scoop + " Loss")
+    # Optimizer Definition
+    optimizer = tf.train.AdamOptimizer(learning_rate=lr)
+    # Related variables for two parts
+    gen_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator"+gen_index)
+    disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=disc_scoop)
+    # Trainer in minimizing loss
+    gen_train = optimizer.minimize(gen_loss_op, var_list=gen_vars)
+    disc_train = optimizer.minimize(disc_loss_op, var_list=disc_vars)
+
+    return gen_loss_op, disc_loss_op, gen_train, disc_train
