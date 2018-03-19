@@ -214,6 +214,7 @@ class DataSet(object):
 
 
 def read_data_sets(train_dir,
+                   sample_vol=None,
                    target_class=None,
                    fake_data=False,
                    one_hot=False,
@@ -271,9 +272,13 @@ def read_data_sets(train_dir,
     train_labels = train_labels[validation_size:]
 
     if target_class is not None:
-        print("Target_class is %d" % target_class)
+        print("Target_class %d" % target_class)
         train_images = train_images[train_labels == target_class]
         train_labels = train_labels[train_labels == target_class]
+    if sample_vol is not None:
+        print("%4d Samples extracted" % sample_vol)
+        train_images = train_images[0:sample_vol]
+        train_labels = train_labels[0:sample_vol]
 
     options = dict(dtype=dtype, reshape=reshape, seed=seed)
 
@@ -287,22 +292,3 @@ def read_data_sets(train_dir,
 def load_mnist(train_dir='MNIST-data'):
     return read_data_sets(train_dir)
 
-# Outdated
-# # Construct Dataset with desired class
-# def get_dataset(num_class, is_train=True):
-#     if is_train:
-#         data = mnist.train.images[mnist.train.labels == num_class]
-#     else:
-#         data = mnist.test.images[mnist.test.labels == num_class]
-#     # print(type(data))
-#     # data = -1 + data * 2.
-#     # print(np.max(data), np.min(data))
-#     print(data.shape)
-#     labels = tf.data.Dataset.from_tensor_slices(np.ones([data.shape[0], ])*num_class)
-#     data = tf.data.Dataset.from_tensor_slices(data)
-#     data = tf.data.Dataset.zip((data, labels))
-#     data = data.apply(tf.contrib.data.batch_and_drop_remainder(batch_size))
-#     data = data.repeat()
-#     iterator = data.make_one_shot_iterator()
-#     # get_next = iter.get_next()
-#     return iterator

@@ -8,7 +8,9 @@ import matplotlib.pyplot as plt
 os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 # Hyper Parameters
-batch_size = 128
+sample_amount = 500
+# batch_size matters when sample_amount is rather small
+batch_size = 8
 learning_rate = 2e-4
 training_step = 1000*3
 display_step = 100
@@ -17,11 +19,11 @@ data_dir = "/home/ziyi/code/data/"
 # Network Parameters
 image_dim = 784
 noise_dim = 64
-desired_calss = [0, 6]
+desired_calss = [8, 9]
 
 # Data Feed
-mnist0 = dataset.read_data_sets(data_dir, target_class=desired_calss[0], one_hot=False)
-mnist1 = dataset.read_data_sets(data_dir, target_class=desired_calss[1], one_hot=False)
+mnist0 = dataset.read_data_sets(data_dir, target_class=desired_calss[0], one_hot=False, sample_vol=sample_amount)
+mnist1 = dataset.read_data_sets(data_dir, target_class=desired_calss[1], one_hot=False, sample_vol=sample_amount)
 
 # Graph Input
 gen_input = tf.placeholder(tf.float32, [None, noise_dim])
@@ -82,8 +84,7 @@ with tf.Session(config=config) as sess:
         if idx % display_step == 0:
             history_writer.add_summary(summary, idx)
             print("Step: {:5d}, GL0: {:6f}, DL0: {:6f}, "
-                  "GL1: {:6f}, DL1: {:6f}, "
-                  "CGL: {:6f}, CDL: {:6f}".format(idx, gl0, dl0, gl1, dl1, cgl, cdl))
+                  "GL1: {:6f}, DL1: {:6f}, CGL: {:6f}, CDL: {:6f}".format(idx, gl0, dl0, gl1, dl1, cgl, cdl))
     history_writer.close()
 
     # Generate images from noise, using the generator network.
@@ -108,4 +109,4 @@ with tf.Session(config=config) as sess:
 
     f.show()
     plt.draw()
-    plt.savefig("./gen_samples/TI_GAN_"+str(desired_calss)+".png")
+    plt.savefig("./gen_samples/TI_GAN_"+str(desired_calss)+"_"+str(sample_amount)+".png")
