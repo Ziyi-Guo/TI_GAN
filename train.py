@@ -17,7 +17,7 @@ data_dir = "/home/ziyi/code/data/"
 # Network Parameters
 image_dim = 784
 noise_dim = 64
-desired_calss = [1, 7]
+desired_calss = [0, 6]
 
 # Data Feed
 mnist0 = dataset.read_data_sets(data_dir, target_class=desired_calss[0], one_hot=False)
