@@ -1,4 +1,8 @@
 import tensorflow as tf
+import numpy as np
+import matplotlib
+matplotlib.use("Agg")
+import matplotlib.pyplot as plt
 
 
 # Generator Network
@@ -106,3 +110,35 @@ def cross_class_operations(gen_sample0, gen_sample1, real_image0, real_image1, t
     disc_train = optimizer.minimize(disc_loss_op, var_list=disc_vars)
 
     return gen_loss_op, disc_loss_op, gen_train, disc_train
+
+
+def plot_image(sess, gen_sample0, gen_sample1, noise_dim, desired_class, sample_amount, gen_input, idx=None):
+    # Generate images from noise, using the generator network.
+    f, a = plt.subplots(4, 5, figsize=(5, 4))
+    for i in range(4):
+        # Noise input.
+        # z = np.random.uniform(-1., 1., size=[4, noise_dim])
+        z = np.random.normal(0., 0.3, size=[5, noise_dim])
+        if i < 2:
+            g = sess.run([gen_sample0], feed_dict={gen_input: z})
+        else:
+            g = sess.run([gen_sample1], feed_dict={gen_input: z})
+
+        g = np.reshape(g, newshape=(5, 28, 28, 1))
+        # Reverse colours for better display
+        # g = -1 * (g - 1)
+        for j in range(5):
+            # Generate image from noise. Extend to 3 channels for matplot figure.
+            img = np.reshape(np.repeat(g[j][:, :, np.newaxis], 3, axis=2),
+                             newshape=(28, 28, 3))
+            a[i][j].imshow(img)
+
+    img_file_name = "./gen_samples/TI_GAN_"+str(desired_class)+"_"+str(sample_amount)
+    if idx is not None:
+        img_file_name = img_file_name + "_" + str(idx) + ".png"
+    else:
+        img_file_name += ".png"
+
+    f.show()
+    plt.draw()
+    plt.savefig(img_file_name)
