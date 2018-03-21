@@ -3,6 +3,7 @@ import numpy as np
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import imageio
 
 
 # Generator Network
@@ -142,3 +143,14 @@ def plot_image(sess, gen_sample0, gen_sample1, noise_dim, desired_class, sample_
     f.show()
     plt.draw()
     plt.savefig(img_file_name)
+
+
+def gif_plot(desired_class, training_step, sample_num):
+    file_prefix = "./gen_samples/TI_GAN_"+str(desired_class)+"_"+str(sample_num)+"_"
+    training_step = int(training_step / 1000)
+    filenames = [file_prefix+str(i)+".png" for i in range(1, training_step)]
+    images = []
+    for fn in filenames:
+        images.append(imageio.imread(fn))
+    kargs = {"duration": 0.75}
+    imageio.mimwrite(file_prefix+"demo.gif", images, format="GIF", **kargs)

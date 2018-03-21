@@ -2,9 +2,6 @@ import os
 import dataset
 from TI_GAN import *
 import numpy as np
-import matplotlib
-matplotlib.use("Agg")
-import matplotlib.pyplot as plt
 os.environ["CUDA_VISIBLE_DEVICES"] = "7"
 
 # Hyper Parameters
@@ -12,18 +9,22 @@ sample_amount = 500
 # batch_size matters when sample_amount is rather small
 batch_size = 8
 learning_rate = 2e-4
-training_step = 1000*3
+training_step = 1000*10
 display_step = 100
-data_dir = "/home/ziyi/code/data/"
 
 # Network Parameters
 image_dim = 784
 noise_dim = 64
-desired_calss = [8, 9]
+desired_class = [0, 6]
 
 # Data Feed
-mnist0 = dataset.read_data_sets(data_dir, target_class=desired_calss[0], one_hot=False, sample_vol=sample_amount)
-mnist1 = dataset.read_data_sets(data_dir, target_class=desired_calss[1], one_hot=False, sample_vol=sample_amount)
+# 784 (reshape=True) | 28*28 (reshape=False)
+image_reshape = False
+data_dir = "/home/ziyi/code/data/"
+mnist0 = dataset.read_data_sets(data_dir, target_class=desired_class[0], one_hot=False,
+                                reshape=image_reshape, sample_vol=sample_amount)
+mnist1 = dataset.read_data_sets(data_dir, target_class=desired_class[1], one_hot=False,
+                                reshape=image_reshape, sample_vol=sample_amount)
 
 # Graph Input
 gen_input = tf.placeholder(tf.float32, [None, noise_dim])
@@ -60,8 +61,8 @@ with tf.Session(config=config) as sess:
         # Sample data for Disc and Gen
         batch_x0, _ = mnist0.train.next_batch(batch_size)
         batch_x1, _ = mnist1.train.next_batch(batch_size)
-        batch_x0 = np.reshape(batch_x0, [-1, 28, 28, 1])
-        batch_x1 = np.reshape(batch_x1, [-1, 28, 28, 1])
+        # batch_x0 = np.reshape(batch_x0, [-1, 28, 28, 1])
+        # batch_x1 = np.reshape(batch_x1, [-1, 28, 28, 1])
         z = np.random.normal(0., 0.3, size=[batch_size, noise_dim])
         # z = uniform(0., 1., size=[batch_size, noise_dim])
 
@@ -76,37 +77,23 @@ with tf.Session(config=config) as sess:
             disc_target: batch_disc_y, gen_target: batch_gen_y,
             disc_target_all: batch_disc_all, disc_target_gen: batch_disc_gen
                      }
-        ops = [merged, gen_train0, disc_train0, gen_loss_op0, disc_loss_op0,
-               gen_train1, disc_train1, gen_loss_op1, disc_loss_op1,
-               cross_gen_loss, cross_disc_loss, cross_gen_train, cross_disc_train]
+        ops = [
+            merged, gen_train0, disc_train0, gen_loss_op0, disc_loss_op0,
+            gen_train1, disc_train1, gen_loss_op1, disc_loss_op1,
+            cross_gen_loss, cross_disc_loss, cross_gen_train, cross_disc_train
+        ]
         summary, _, _, gl0, dl0, _, _, gl1, dl1, cgl, cdl, _, _ = sess.run(ops, feed_dict=feed_dict)
 
         if idx % display_step == 0:
             history_writer.add_summary(summary, idx)
             print("Step: {:5d}, GL0: {:6f}, DL0: {:6f}, "
                   "GL1: {:6f}, DL1: {:6f}, CGL: {:6f}, CDL: {:6f}".format(idx, gl0, dl0, gl1, dl1, cgl, cdl))
+        if (idx+1) % 1000 == 0 and (idx+1) / 1000 > 0:
+            d = int((idx+1)/1000)
+            plot_image(sess, gen_sample0, gen_sample1, noise_dim, desired_class, sample_amount, gen_input, d)
+            # if idx > 2000:
+            #     g = sess.run([gen_sample0], feed_dict={gen_input: z})
+            #     mnist0.train.concat_batch(g[0])
+
     history_writer.close()
-
-    # Generate images from noise, using the generator network.
-    f, a = plt.subplots(4, 5, figsize=(5, 4))
-    for i in range(4):
-        # Noise input.
-        # z = np.random.uniform(-1., 1., size=[4, noise_dim])
-        z = np.random.normal(0., 0.3, size=[5, noise_dim])
-        if i < 2:
-            g = sess.run([gen_sample0], feed_dict={gen_input: z})
-        else:
-            g = sess.run([gen_sample1], feed_dict={gen_input: z})
-
-        g = np.reshape(g, newshape=(5, 28, 28, 1))
-        # Reverse colours for better display
-        # g = -1 * (g - 1)
-        for j in range(5):
-            # Generate image from noise. Extend to 3 channels for matplot figure.
-            img = np.reshape(np.repeat(g[j][:, :, np.newaxis], 3, axis=2),
-                             newshape=(28, 28, 3))
-            a[i][j].imshow(img)
-
-    f.show()
-    plt.draw()
-    plt.savefig("./gen_samples/TI_GAN_"+str(desired_calss)+"_"+str(sample_amount)+".png")
+    gif_plot(desired_class, training_step, sample_amount)
