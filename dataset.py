@@ -169,15 +169,15 @@ class DataSet(object):
 
     def next_batch(self, batch_size, fake_data=False, shuffle=True):
         """Return the next `batch_size` examples from this data set."""
-        if fake_data:
-            fake_image = [1] * 784
-            if self.one_hot:
-                fake_label = [1] + [0] * 9
-            else:
-                fake_label = 0
-            return [fake_image for _ in xrange(batch_size)], [
-                fake_label for _ in xrange(batch_size)
-            ]
+        # if fake_data:
+        #     fake_image = [1] * 784
+        #     if self.one_hot:
+        #         fake_label = [1] + [0] * 9
+        #     else:
+        #         fake_label = 0
+        #     return [fake_image for _ in xrange(batch_size)], [
+        #         fake_label for _ in xrange(batch_size)
+        #     ]
         start = self._index_in_epoch
         # Shuffle for the first epoch
         if self._epochs_completed == 0 and start == 0 and shuffle:
@@ -212,6 +212,15 @@ class DataSet(object):
             end = self._index_in_epoch
             return self._images[start:end], self._labels[start:end]
 
+    def concat_batch(self, batch_data):
+        data_size = batch_data.shape[0]
+        # print(self._images.shape, batch_data.shape)
+        # batch_data = numpy.resize(batch_data, [-1, 28, 28])
+        self._images = numpy.vstack((self._images, batch_data))
+        labels = numpy.tile(self._labels[0], reps=(data_size, 1))
+        self._labels = numpy.append(self._labels, labels)
+        self._num_examples += data_size
+
 
 def read_data_sets(train_dir,
                    sample_vol=None,
@@ -223,15 +232,15 @@ def read_data_sets(train_dir,
                    validation_size=5000,
                    seed=None,
                    source_url=DEFAULT_SOURCE_URL):
-    if fake_data:
-        def fake():
-            return DataSet(
-                [], [], fake_data=True, one_hot=one_hot, dtype=dtype, seed=seed)
-
-        train = fake()
-        validation = fake()
-        test = fake()
-        return base.Datasets(train=train, validation=validation, test=test)
+    # if fake_data:
+    #     def fake():
+    #         return DataSet(
+    #             [], [], fake_data=True, one_hot=one_hot, dtype=dtype, seed=seed)
+    #
+    #     train = fake()
+    #     validation = fake()
+    #     test = fake()
+    #     return base.Datasets(train=train, validation=validation, test=test)
 
     if not source_url:  # empty string check
         source_url = DEFAULT_SOURCE_URL
@@ -275,6 +284,8 @@ def read_data_sets(train_dir,
         print("Target_class %d" % target_class)
         train_images = train_images[train_labels == target_class]
         train_labels = train_labels[train_labels == target_class]
+        test_images = test_images[test_labels == target_class]
+        test_labels = test_labels[test_labels == target_class]
     if sample_vol is not None:
         print("%4d Samples extracted" % sample_vol)
         train_images = train_images[0:sample_vol]
