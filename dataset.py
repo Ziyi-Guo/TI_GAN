@@ -288,8 +288,11 @@ def read_data_sets(train_dir,
         test_labels = test_labels[test_labels == target_class]
     if sample_vol is not None:
         print("%4d Samples extracted" % sample_vol)
+        test_images = numpy.concatenate([train_images[sample_vol + 1:-1], test_images])
+        test_labels = numpy.concatenate([train_labels[sample_vol + 1:-1], test_labels])
         train_images = train_images[0:sample_vol]
         train_labels = train_labels[0:sample_vol]
+        print(train_images.shape, test_images.shape)
 
     options = dict(dtype=dtype, reshape=reshape, seed=seed)
 

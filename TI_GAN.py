@@ -85,10 +85,10 @@ def train_operations(noise, image_input, disc_t, gen_t, index, lr=2e-4):
 
 def cross_class_operations(gen_sample0, gen_sample1, real_image0, real_image1, target_all, target_gen, lr=2e-4/1.5):
     disc_scoop = "Discriminator_Cross"
-    disc_class0_real = mlp(real_image0, scoop_name=disc_scoop)
-    disc_class0_fake = mlp(gen_sample0, scoop_name=disc_scoop, reuse=True)
-    disc_class1_real = mlp(real_image1, scoop_name=disc_scoop, reuse=True)
-    disc_class1_fake = mlp(gen_sample1, scoop_name=disc_scoop, reuse=True)
+    disc_class0_real = discriminator(real_image0, scoop_name=disc_scoop)
+    disc_class0_fake = discriminator(gen_sample0, scoop_name=disc_scoop, reuse=True)
+    disc_class1_real = discriminator(real_image1, scoop_name=disc_scoop, reuse=True)
+    disc_class1_fake = discriminator(gen_sample1, scoop_name=disc_scoop, reuse=True)
 
     disc_all = tf.concat([disc_class0_real, disc_class0_fake, disc_class1_real, disc_class1_fake], axis=0)
     disc_gen = tf.concat([disc_class0_fake, disc_class1_fake], axis=0)
