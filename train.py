@@ -2,10 +2,11 @@ import os
 import dataset
 from TI_GAN import *
 import numpy as np
-os.environ["CUDA_VISIBLE_DEVICES"] = "7"
+from sklearn import svm
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 
 # Hyper Parameters
-sample_amount = 500
+sample_amount = 300
 # batch_size matters when sample_amount is rather small
 batch_size = 8
 learning_rate = 2e-4
@@ -15,7 +16,7 @@ display_step = 100
 # Network Parameters
 image_dim = 784
 noise_dim = 64
-desired_class = [0, 6]
+desired_class = [0, 9]
 
 # Data Feed
 # 784 (reshape=True) | 28*28 (reshape=False)
@@ -48,6 +49,16 @@ cross_gen_loss, cross_disc_loss, cross_gen_train, cross_disc_train = \
     cross_class_operations(gen_sample0, gen_sample1, real_image_input0,
                            real_image_input1, disc_target_all, disc_target_gen)
 
+clf = svm.SVC(kernel='linear')
+# mlp_prev = mlp(real_image_input0, scoop_name="Prev")
+# pred = tf.nn.softmax(mlp_prev)
+# # mlp_after = mlp(tf.concat([real_image_input0, real_image_input1], axis=0), scoop_name="After")
+# mlp_loss = tf.reduce_mean(
+#     tf.nn.sparse_softmax_cross_entropy_with_logits(labels=disc_target, logits=mlp_prev))
+# mlp_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Prev")
+# mlp_train = tf.train.AdamOptimizer(learning_rate).minimize(mlp_loss,var_list=mlp_vars)
+
+
 merged = tf.summary.merge_all()
 history_writer = tf.summary.FileWriter("/home/ziyi/code/data/TI_GAN")
 init = tf.global_variables_initializer()
@@ -56,6 +67,26 @@ config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
     sess.run(init)
+
+    train_images = np.concatenate([mnist0.train.images, mnist1.train.images], 0)
+    train_labels = np.concatenate([np.ones(mnist1.train.num_examples), np.zeros(mnist1.train.num_examples)])
+    test_num = mnist0.test.num_examples
+    test_images = np.concatenate([mnist0.test.images, mnist1.test.images], 0)
+    test_labels = np.concatenate([np.ones(test_num), np.zeros(mnist1.test.num_examples)])
+    clf.fit(train_images.reshape([-1, 28*28]), train_labels)
+    prediction = clf.predict(test_images.reshape([-1, 28*28]))
+    print(np.mean(prediction==test_labels)*1.)
+    # for idx in range(500):
+    #     batch_x0, _ = mnist0.train.next_batch(batch_size)
+    #     batch_x1, _ = mnist1.train.next_batch(batch_size)
+    #     batch_disc_y = np.concatenate([np.ones([batch_size]), np.zeros([batch_size])], axis=0)
+    #     m_loss, _ = sess.run([mlp_loss, mlp_train],
+    #                          feed_dict={real_image_input0: np.concatenate([batch_x0,batch_x1],0),disc_target:batch_disc_y})
+    #
+    # pred_correct = tf.equal(tf.argmax(pred, 1, output_type=tf.int32), disc_target)
+    # accuracy = tf.reduce_mean(tf.cast(pred_correct, tf.float32))
+    # print(sess.run([mlp_loss, accuracy],
+    #                feed_dict={real_image_input0:test_images, disc_target: test_labels}))
 
     for idx in range(training_step):
         # Sample data for Disc and Gen
@@ -84,16 +115,32 @@ with tf.Session(config=config) as sess:
         ]
         summary, _, _, gl0, dl0, _, _, gl1, dl1, cgl, cdl, _, _ = sess.run(ops, feed_dict=feed_dict)
 
-        if idx % display_step == 0:
+        if (idx + 1) % display_step == 0:
             history_writer.add_summary(summary, idx)
             print("Step: {:5d}, GL0: {:6f}, DL0: {:6f}, "
-                  "GL1: {:6f}, DL1: {:6f}, CGL: {:6f}, CDL: {:6f}".format(idx, gl0, dl0, gl1, dl1, cgl, cdl))
-        if (idx+1) % 1000 == 0 and (idx+1) / 1000 > 0:
+                  "GL1: {:6f}, DL1: {:6f}, CGL: {:6f}, CDL: {:6f}".format(idx + 1, gl0, dl0, gl1, dl1, cgl, cdl))
+            if (idx + 1) >= 4000:
+                g0, g1 = sess.run([gen_sample0, gen_sample1], feed_dict={gen_input: z})
+                mnist0.train.concat_batch(g0)
+                mnist1.train.concat_batch(g1)
+        if (idx+1) % 1000 == 0:
             d = int((idx+1)/1000)
             plot_image(sess, gen_sample0, gen_sample1, noise_dim, desired_class, sample_amount, gen_input, d)
-            # if idx > 2000:
-            #     g = sess.run([gen_sample0], feed_dict={gen_input: z})
-            #     mnist0.train.concat_batch(g[0])
+
+    for idx in range(500):
+        batch_x0, _ = mnist0.train.next_batch(batch_size)
+        batch_x1, _ = mnist1.train.next_batch(batch_size)
+        batch_disc_y = np.concatenate([np.ones([batch_size]), np.zeros([batch_size])], axis=0)
+        m_loss, _ = sess.run([mlp_loss, mlp_train],
+                             feed_dict={real_image_input0: np.concatenate([batch_x0,batch_x1],0),disc_target:batch_disc_y})
+
+    # pred_correct = tf.equal(tf.argmax(pred, 1, output_type=tf.int32), disc_target)
+    # accuracy = tf.reduce_mean(tf.cast(pred_correct, tf.float32))
+    # test_num = mnist0.test.num_examples
+    # test_images = np.concatenate([mnist0.test.images, mnist1.test.images], 0)
+    # test_labels = np.concatenate([np.ones(test_num),np.zeros(mnist1.test.num_examples)])
+    # print(sess.run([mlp_loss, accuracy],
+    #                feed_dict={real_image_input0:test_images, disc_target: test_labels}))
 
     history_writer.close()
     gif_plot(desired_class, training_step, sample_amount)
