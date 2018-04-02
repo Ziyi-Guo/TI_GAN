@@ -282,6 +282,12 @@ def read_data_sets(train_dir,
 
     if target_class is not None:
         print("Target_class %d" % target_class)
+        # Use all oppo classes as imbalanced
+        ext_train_images = train_images[train_labels != target_class]
+        ext_train_labels = train_labels[train_labels != target_class]
+        ext_test_images = test_images[test_labels != target_class]
+        ext_test_labels = test_labels[test_labels != target_class]
+
         train_images = train_images[train_labels == target_class]
         train_labels = train_labels[train_labels == target_class]
         test_images = test_images[test_labels == target_class]
@@ -292,7 +298,6 @@ def read_data_sets(train_dir,
         test_labels = numpy.concatenate([train_labels[sample_vol + 1:-1], test_labels])
         train_images = train_images[0:sample_vol]
         train_labels = train_labels[0:sample_vol]
-        print(train_images.shape, test_images.shape)
 
     options = dict(dtype=dtype, reshape=reshape, seed=seed)
 
@@ -300,7 +305,14 @@ def read_data_sets(train_dir,
     validation = DataSet(validation_images, validation_labels, **options)
     test = DataSet(test_images, test_labels, **options)
 
-    return base.Datasets(train=train, validation=validation, test=test)
+    ext_train = DataSet(ext_train_images, ext_train_labels, **options)
+    ext_test = DataSet(ext_test_images, ext_test_labels, **options)
+    ext_validation = DataSet(validation_images, validation_labels, **options)
+
+    target_dataset = base.Datasets(train=train, validation=validation, test=test)
+    oppo_dataset = base.Datasets(train=ext_train, validation=ext_validation, test=ext_test)
+
+    return target_dataset, oppo_dataset
 
 
 def load_mnist(train_dir='MNIST-data'):

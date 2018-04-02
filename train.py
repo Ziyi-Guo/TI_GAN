@@ -16,16 +16,19 @@ display_step = 100
 # Network Parameters
 image_dim = 784
 noise_dim = 64
-desired_class = [0, 9]
+desired_class = 9
 
 # Data Feed
 # 784 (reshape=True) | 28*28 (reshape=False)
 image_reshape = False
 data_dir = "/home/ziyi/code/data/"
-mnist0 = dataset.read_data_sets(data_dir, target_class=desired_class[0], one_hot=False,
+mnist0,mnist1 = dataset.read_data_sets(data_dir, target_class=desired_class, one_hot=False,
                                 reshape=image_reshape, sample_vol=sample_amount)
-mnist1 = dataset.read_data_sets(data_dir, target_class=desired_class[1], one_hot=False,
-                                reshape=image_reshape, sample_vol=sample_amount)
+
+print(mnist1.train.images.shape, mnist1.train.num_examples)
+
+# mnist1 = dataset.read_data_sets(data_dir, target_class=desired_class[1], one_hot=False,
+#                                 reshape=image_reshape, sample_vol=sample_amount)
 
 # Graph Input
 gen_input = tf.placeholder(tf.float32, [None, noise_dim])
@@ -69,7 +72,7 @@ with tf.Session(config=config) as sess:
     sess.run(init)
 
     train_images = np.concatenate([mnist0.train.images, mnist1.train.images], 0)
-    train_labels = np.concatenate([np.ones(mnist1.train.num_examples), np.zeros(mnist1.train.num_examples)])
+    train_labels = np.concatenate([np.ones(mnist0.train.num_examples), np.zeros(mnist1.train.num_examples)])
     test_num = mnist0.test.num_examples
     test_images = np.concatenate([mnist0.test.images, mnist1.test.images], 0)
     test_labels = np.concatenate([np.ones(test_num), np.zeros(mnist1.test.num_examples)])
@@ -122,17 +125,17 @@ with tf.Session(config=config) as sess:
             if (idx + 1) >= 4000:
                 g0, g1 = sess.run([gen_sample0, gen_sample1], feed_dict={gen_input: z})
                 mnist0.train.concat_batch(g0)
-                mnist1.train.concat_batch(g1)
+                # mnist1.train.concat_batch(g1)
         if (idx+1) % 1000 == 0:
             d = int((idx+1)/1000)
             plot_image(sess, gen_sample0, gen_sample1, noise_dim, desired_class, sample_amount, gen_input, d)
 
-    for idx in range(500):
-        batch_x0, _ = mnist0.train.next_batch(batch_size)
-        batch_x1, _ = mnist1.train.next_batch(batch_size)
-        batch_disc_y = np.concatenate([np.ones([batch_size]), np.zeros([batch_size])], axis=0)
-        m_loss, _ = sess.run([mlp_loss, mlp_train],
-                             feed_dict={real_image_input0: np.concatenate([batch_x0,batch_x1],0),disc_target:batch_disc_y})
+    # for idx in range(500):
+    #     batch_x0, _ = mnist0.train.next_batch(batch_size)
+    #     batch_x1, _ = mnist1.train.next_batch(batch_size)
+    #     batch_disc_y = np.concatenate([np.ones([batch_size]), np.zeros([batch_size])], axis=0)
+    #     m_loss, _ = sess.run([mlp_loss, mlp_train],
+    #                          feed_dict={real_image_input0: np.concatenate([batch_x0,batch_x1],0),disc_target:batch_disc_y})
 
     # pred_correct = tf.equal(tf.argmax(pred, 1, output_type=tf.int32), disc_target)
     # accuracy = tf.reduce_mean(tf.cast(pred_correct, tf.float32))
@@ -141,6 +144,15 @@ with tf.Session(config=config) as sess:
     # test_labels = np.concatenate([np.ones(test_num),np.zeros(mnist1.test.num_examples)])
     # print(sess.run([mlp_loss, accuracy],
     #                feed_dict={real_image_input0:test_images, disc_target: test_labels}))
+
+    train_images = np.concatenate([mnist0.train.images, mnist1.train.images], 0)
+    train_labels = np.concatenate([np.ones(mnist0.train.num_examples), np.zeros(mnist1.train.num_examples)])
+    test_num = mnist0.test.num_examples
+    test_images = np.concatenate([mnist0.test.images, mnist1.test.images], 0)
+    test_labels = np.concatenate([np.ones(test_num), np.zeros(mnist1.test.num_examples)])
+    clf.fit(train_images.reshape([-1, 28 * 28]), train_labels)
+    prediction = clf.predict(test_images.reshape([-1, 28 * 28]))
+    print(np.mean(prediction == test_labels) * 1.)
 
     history_writer.close()
     gif_plot(desired_class, training_step, sample_amount)
