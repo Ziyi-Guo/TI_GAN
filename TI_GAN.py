@@ -51,8 +51,19 @@ def mlp(x, scoop_name="Discriminator", reuse=False):
         return out
 
 
+# Fusion Discriminator SVM
+def svm(x, scoop_name, reuse=False, alpha=0.01):
+    x = tf.reshape(x, [-1, 28*28])
+    with tf.variable_scope(scoop_name, reuse=reuse):
+        regularizer = tf.contrib.layers.l2_regularizer(scale=alpha)
+        da_out = tf.layers.dense(x, 1,
+                                 kernel_initializer=tf.random_normal_initializer(stddev=0.1),
+                                 kernel_regularizer=regularizer)
+    return da_out
+
+
 # Defining GAN and Operations
-def train_operations(noise, image_input, disc_t, gen_t, index, lr=2e-4):
+def train_operations(noise, image_input, disc_t, gen_t, index):
     gen_scoop = "Generator"+index
     disc_scoop = "Discriminator"+index
 
@@ -62,55 +73,36 @@ def train_operations(noise, image_input, disc_t, gen_t, index, lr=2e-4):
     stacked_gan = discriminator(gen_sample, scoop_name=disc_scoop, reuse=True)
     disc_concat = tf.concat([disc_real_out, stacked_gan], axis=0)
 
-
     # Loss Definition
-    disc_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+    disc_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
         labels=disc_t, logits=disc_concat))
-    gen_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
+    gen_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
         labels=gen_t, logits=stacked_gan))
-    tf.summary.scalar(tensor=disc_loss_op, name=disc_scoop+" Loss")
-    tf.summary.scalar(tensor=gen_loss_op, name=gen_scoop+" Loss")
+    tf.summary.scalar(tensor=disc_loss, name=disc_scoop+" Loss")
+    tf.summary.scalar(tensor=gen_loss, name=gen_scoop+" Loss")
 
-    # Optimizer Definition
-    optimizer = tf.train.AdamOptimizer(learning_rate=lr)
-    # Related variables for two parts
-    gen_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=gen_scoop)
-    disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=disc_scoop)
-    # Trainer in minimizing loss
-    gen_train = optimizer.minimize(gen_loss_op, var_list=gen_vars)
-    disc_train = optimizer.minimize(disc_loss_op, var_list=disc_vars)
-
-    return gen_sample, gen_train, disc_train, gen_loss_op, disc_loss_op
+    return gen_sample, gen_loss, disc_loss
 
 
-def cross_class_operations(gen_sample0, gen_sample1, real_image0, real_image1, target_all, target_gen, lr=2e-4/1.5):
-    disc_scoop = "Discriminator_Cross"
-    disc_class0_real = discriminator(real_image0, scoop_name=disc_scoop)
-    disc_class0_fake = discriminator(gen_sample0, scoop_name=disc_scoop, reuse=True)
-    disc_class1_real = discriminator(real_image1, scoop_name=disc_scoop, reuse=True)
-    disc_class1_fake = discriminator(gen_sample1, scoop_name=disc_scoop, reuse=True)
+def cross_class_operations(gen_sample0, gen_sample1, real_image0, real_image1, target_real, target_gen):
+    disc_scoop = "Cross_Discriminator"
+    disc_class0_real = svm(real_image0, scoop_name=disc_scoop)
+    disc_class0_fake = svm(gen_sample0, scoop_name=disc_scoop, reuse=True)
+    disc_class1_real = svm(real_image1, scoop_name=disc_scoop, reuse=True)
+    disc_class1_fake = svm(gen_sample1, scoop_name=disc_scoop, reuse=True)
 
-    disc_all = tf.concat([disc_class0_real, disc_class0_fake, disc_class1_real, disc_class1_fake], axis=0)
+    # SVM tries to minimize the classification loss on real images(Training Data)
+    # while Gen tries to maximize the loss on generated images(Gen Samples)
+    disc_real = tf.concat([disc_class0_real, disc_class1_real], axis=0)
     disc_gen = tf.concat([disc_class0_fake, disc_class1_fake], axis=0)
 
     # Loss Definition
-    gen_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-        labels=target_gen, logits=disc_gen))
-    disc_loss_op = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(
-        labels=target_all, logits=disc_all))
-    tf.summary.scalar(tensor=gen_loss_op, name="Generator Cross Loss")
-    tf.summary.scalar(tensor=disc_loss_op, name=disc_scoop + " Loss")
-    # Optimizer Definition
-    optimizer = tf.train.AdamOptimizer(learning_rate=lr)
-    # Related variables for two parts
-    gen_vars0 = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator0")
-    gen_vars1 = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator1")
-    disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope=disc_scoop)
-    # Trainer in minimizing loss
-    gen_train = optimizer.minimize(gen_loss_op, var_list=[gen_vars0, gen_vars1])
-    disc_train = optimizer.minimize(disc_loss_op, var_list=disc_vars)
+    disc_loss = tf.reduce_mean(tf.maximum(0., 1. - disc_real * tf.cast(target_real, tf.float32)))
+    gen_loss =  tf.reduce_mean(tf.maximum(0., 1. - disc_gen * tf.cast(target_gen, tf.float32)))
+    tf.summary.scalar(tensor=gen_loss, name="Generator Cross Loss")
+    tf.summary.scalar(tensor=disc_loss, name=disc_scoop + " Loss")
 
-    return gen_loss_op, disc_loss_op, gen_train, disc_train
+    return gen_loss, disc_loss
 
 
 def plot_image(sess, gen_sample0, gen_sample1, noise_dim, desired_class, sample_amount, gen_input, idx=None):
