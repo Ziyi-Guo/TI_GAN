@@ -97,8 +97,8 @@ def cross_class_operations(gen_sample0, gen_sample1, real_image0, real_image1, t
     real_acc = tf.reduce_mean(tf.cast(tf.equal(real_prediction, tf.cast(target_real, tf.float32)), tf.float32))
 
     target_real, target_gen = tf.reshape(target_real,(-1, 1)), tf.reshape(target_gen, (-1, 1))
-    disc_loss = tf.reduce_mean(tf.maximum(0., 1. - disc_real*tf.cast(target_real, tf.float32)))
-    gen_loss =  tf.reduce_mean(tf.maximum(0., 1. - tf.multiply(disc_gen, tf.cast(target_gen, tf.float32))))
+    disc_loss = tf.reduce_mean(tf.maximum(0., 1. - disc_real * tf.cast(target_real, tf.float32)))
+    gen_loss =  tf.reduce_mean(tf.maximum(0., 1. - disc_gen * tf.cast(target_gen, tf.float32)))
     tf.summary.scalar(tensor=gen_loss, name="Generator Cross Loss")
     tf.summary.scalar(tensor=disc_loss, name=disc_scoop + " Loss")
 

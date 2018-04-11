@@ -11,9 +11,9 @@ sample_amount = 200
 # batch_size matters when sample_amount is rather small
 batch_size = 8
 learning_rate = 2e-4
-training_step = 1000*8
+training_step = 1000*6
 display_step = 100
-alpha = 0.1
+alpha = 0.5
 
 # Network Parameters
 image_dim = 784
@@ -26,11 +26,12 @@ image_reshape = False
 data_dir = "/home/ziyi/code/data/"
 mnist0 = dataset.read_data_sets(data_dir, target_class=desired_class[0], one_hot=False,
                                 reshape=image_reshape, sample_vol=sample_amount)
-
 # print(mnist1.train.images.shape, mnist1.train.num_examples)
-
 mnist1 = dataset.read_data_sets(data_dir, target_class=desired_class[1], one_hot=False,
                                 reshape=image_reshape, sample_vol=sample_amount*10)
+
+test_images = np.concatenate([mnist0.test.images, mnist1.test.images], 0)
+test_labels = np.concatenate([np.ones(mnist0.test.num_examples), -np.ones(mnist1.test.num_examples)])
 
 # Graph Input
 gen_input = tf.placeholder(tf.float32, [None, noise_dim])
@@ -80,22 +81,10 @@ config.gpu_options.allow_growth = True
 with tf.Session(config=config) as sess:
     sess.run(init)
 
-    train_images = np.concatenate([mnist0.train.images, mnist1.train.images], 0)
-    train_labels = np.concatenate([np.ones(mnist0.train.num_examples), -np.ones(mnist1.train.num_examples)])
-    test_num = mnist0.test.num_examples
-    test_images = np.concatenate([mnist0.test.images, mnist1.test.images], 0)
-    test_labels = np.concatenate([np.ones(test_num), -np.ones(mnist1.test.num_examples)])
-    clf0 = svm.SVC(kernel='linear')
-    clf0.fit(train_images.reshape([-1, 28*28]), train_labels)
-    prediction = clf0.predict(test_images.reshape([-1, 28*28]))
-    print(np.mean(prediction==test_labels)*1.)
-
     for idx in range(training_step):
         # Sample data for Disc and Gen
         batch_x0, _ = mnist0.train.next_batch(batch_size)
         batch_x1, _ = mnist1.train.next_batch(batch_size)
-        # batch_x0 = np.reshape(batch_x0, [-1, 28, 28, 1])
-        # batch_x1 = np.reshape(batch_x1, [-1, 28, 28, 1])
         z = np.random.normal(0., 0.3, size=[batch_size, noise_dim])
 
         # Sample labels for Disc
@@ -105,14 +94,16 @@ with tf.Session(config=config) as sess:
         batch_disc_real = np.concatenate([np.ones([batch_size]), -np.ones([batch_size])], axis=0)
 
         feed_dict = {
-            gen_input: z, real_image_input0: batch_x0, real_image_input1: batch_x1,
+            gen_input: z,
+            real_image_input0: batch_x0, real_image_input1: batch_x1,
             disc_target: batch_disc_y, gen_target: batch_gen_y,
-            disc_target_real: batch_disc_real, disc_target_gen: batch_disc_gen
+            disc_target_real: batch_disc_real,
+            disc_target_gen: batch_disc_gen
                      }
         ops = [
             merged, gen0_train, disc0_train, gen0_loss, disc0_loss,
             gen1_train, disc1_train, gen1_loss, disc1_loss,
-            cross_gen_loss,cross_disc_loss, disc_cross_train
+            cross_gen_loss, cross_disc_loss, disc_cross_train
         ]
         summary, _, _, gl0, dl0, _, _, gl1, dl1, cgl, cdl, _ = sess.run(ops, feed_dict=feed_dict)
 
@@ -121,7 +112,7 @@ with tf.Session(config=config) as sess:
             print("Step: {:5d}, GL0: {:6f}, DL0: {:6f}, "
                   "GL1: {:6f}, DL1: {:6f}, CGL: {:6f}, CDL: {:6f}".format(idx + 1, gl0, dl0, gl1, dl1, cgl, cdl))
 
-            if (idx + 1) >= 4000:
+            if (idx + 1) >= 3000:
                 g0, g1 = sess.run([gen_sample0, gen_sample1], feed_dict={gen_input: z})
                 mnist0.train.concat_batch(g0)
                 mnist1.train.concat_batch(g1)
@@ -129,16 +120,14 @@ with tf.Session(config=config) as sess:
             d = int((idx+1)/1000)
             plot_image(sess, gen_sample0, gen_sample1, noise_dim, desired_class, sample_amount, gen_input, d)
 
-    print(mnist0.train.num_examples)
-    train_images = np.concatenate([mnist0.train.images, mnist1.train.images], 0)
-    train_labels = np.concatenate([np.ones(mnist0.train.num_examples), -np.ones(mnist1.train.num_examples)])
-    test_num = mnist0.test.num_examples
-    test_images = np.concatenate([mnist0.test.images, mnist1.test.images], 0)
-    test_labels = np.concatenate([np.ones(test_num), -np.ones(mnist1.test.num_examples)])
-    clf1 = svm.SVC(kernel='linear')
-    clf1.fit(train_images.reshape([-1, 28 * 28]), train_labels)
-    prediction = clf1.predict(test_images.reshape([-1, 28 * 28]))
-    print(np.mean(prediction == test_labels) * 1.)
+        if (idx+1) == 1000:
+            print("ACC of original SVM: %f " % sess.run(real_acc, feed_dict={real_image_input0: mnist0.test.images,
+                                                                             real_image_input1: mnist1.test.images,
+                                                                             disc_target_real: test_labels}))
+
+    print("ACC of after SVM: %f" % sess.run(real_acc, feed_dict={real_image_input0: mnist0.test.images,
+                                                                 real_image_input1: mnist1.test.images,
+                                                                 disc_target_real: test_labels}))
 
     history_writer.close()
     gif_plot(desired_class, training_step, sample_amount)
