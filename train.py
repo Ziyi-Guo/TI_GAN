@@ -13,7 +13,7 @@ batch_size = 8
 learning_rate = 2e-4
 training_step = 1000*8
 display_step = 100
-alpha = 0.4
+alpha = 0.1
 
 # Network Parameters
 image_dim = 784
@@ -49,10 +49,9 @@ gen_sample0, gen0_loss, disc0_loss = \
 gen_sample1, gen1_loss, disc1_loss = \
     train_operations(gen_input, real_image_input1, disc_target, gen_target, index="1")
 
-cross_gen_loss, cross_disc_loss = \
+cross_gen_loss, cross_disc_loss, real_acc = \
     cross_class_operations(gen_sample0, gen_sample1, real_image_input0,
                            real_image_input1, disc_target_real, disc_target_gen)
-
 
 gen0_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator0")
 gen1_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator1")
@@ -98,7 +97,6 @@ with tf.Session(config=config) as sess:
         # batch_x0 = np.reshape(batch_x0, [-1, 28, 28, 1])
         # batch_x1 = np.reshape(batch_x1, [-1, 28, 28, 1])
         z = np.random.normal(0., 0.3, size=[batch_size, noise_dim])
-        # z = uniform(0., 1., size=[batch_size, noise_dim])
 
         # Sample labels for Disc
         batch_gen_y = np.ones([batch_size])
@@ -114,15 +112,15 @@ with tf.Session(config=config) as sess:
         ops = [
             merged, gen0_train, disc0_train, gen0_loss, disc0_loss,
             gen1_train, disc1_train, gen1_loss, disc1_loss,
-            cross_gen_loss, cross_disc_loss
+            cross_gen_loss,cross_disc_loss, disc_cross_train
         ]
-        summary, _, _, gl0, dl0, _, _, gl1, dl1, cgl, cdl = sess.run(ops, feed_dict=feed_dict)
-        # print(cdl)
+        summary, _, _, gl0, dl0, _, _, gl1, dl1, cgl, cdl, _ = sess.run(ops, feed_dict=feed_dict)
 
         if (idx + 1) % display_step == 0:
             history_writer.add_summary(summary, idx)
             print("Step: {:5d}, GL0: {:6f}, DL0: {:6f}, "
                   "GL1: {:6f}, DL1: {:6f}, CGL: {:6f}, CDL: {:6f}".format(idx + 1, gl0, dl0, gl1, dl1, cgl, cdl))
+
             if (idx + 1) >= 4000:
                 g0, g1 = sess.run([gen_sample0, gen_sample1], feed_dict={gen_input: z})
                 mnist0.train.concat_batch(g0)
