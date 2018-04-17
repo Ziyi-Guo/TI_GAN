@@ -3,13 +3,13 @@ import dataset
 from TI_GAN import *
 import numpy as np
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "3"
+os.environ["CUDA_VISIBLE_DEVICES"] = "6"
 
 # Hyper Parameters
 sample_amount = 200
 # batch_size matters when sample_amount is rather small
 batch_size = 8
-learning_rate = 2e-4
+learning_rate = 1e-4
 training_step = 1000*6
 display_step = 100
 alpha = 0.5
@@ -35,7 +35,6 @@ test_labels = np.concatenate([np.ones(mnist0.test.num_examples), -np.ones(mnist1
 gen_input = tf.placeholder(tf.float32, [None, noise_dim])
 real_image_input0 = tf.placeholder(tf.float32, [None, 28, 28, 1])
 real_image_input1 = tf.placeholder(tf.float32, [None, 28, 28, 1])
-# Targets Input
 disc_target = tf.placeholder(tf.int32, shape=[None])
 gen_target = tf.placeholder(tf.int32, shape=[None])
 disc_target_real = tf.placeholder(tf.int32, shape=[None])
@@ -52,6 +51,8 @@ cross_gen_loss, cross_disc_loss, real_acc = \
     cross_class_operations(gen_sample0, gen_sample1, real_image_input0,
                            real_image_input1, disc_target_real, disc_target_gen)
 
+gen0_loss = tf.subtract(gen0_loss, alpha * cross_gen_loss)
+gen1_loss = tf.subtract(gen1_loss, alpha * cross_gen_loss)
 
 # Varlist of all operations
 gen0_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator0")
@@ -59,9 +60,6 @@ gen1_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator
 disc0_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Discriminator0")
 disc1_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Discriminator1")
 cross_disc_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Cross_Discriminator")
-
-gen0_loss = tf.subtract(gen0_loss, alpha * cross_gen_loss)
-gen1_loss = tf.subtract(gen1_loss, alpha * cross_gen_loss)
 # Optimizer Definition
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
 # Trainer in minimizing loss
@@ -71,20 +69,15 @@ disc0_train = optimizer.minimize(disc0_loss, var_list=disc0_vars)
 disc1_train = optimizer.minimize(disc1_loss, var_list=disc1_vars)
 disc_cross_train = optimizer.minimize(cross_disc_loss, var_list=cross_disc_vars)
 
-
 merged = tf.summary.merge_all()
 history_writer = tf.summary.FileWriter("/home/ziyi/code/data/TI_GAN")
-init = tf.global_variables_initializer()
 
-config = tf.ConfigProto()
-config.gpu_options.allow_growth = True
-with tf.Session(config=config) as sess:
-    sess.run(init)
 
-    for idx in range(training_step):
+def train_all(session, steps, dset0, dset1):
+    for idx in range(steps):
         # Sample data for Disc and Gen
-        batch_x0, _ = mnist0.train.next_batch(batch_size)
-        batch_x1, _ = mnist1.train.next_batch(batch_size)
+        batch_x0, _ = dset0.train.next_batch(batch_size)
+        batch_x1, _ = dset1.train.next_batch(batch_size)
         z = np.random.normal(0., 0.3, size=[batch_size, noise_dim])
 
         # Sample labels for Disc
@@ -105,24 +98,29 @@ with tf.Session(config=config) as sess:
             gen1_train, disc1_train, gen1_loss, disc1_loss,
             cross_gen_loss, cross_disc_loss, disc_cross_train
         ]
-        summary, _, _, gl0, dl0, _, _, gl1, dl1, cgl, cdl, _ = sess.run(ops, feed_dict=feed_dict)
+        summary, _, _, gl0, dl0, _, _, gl1, dl1, cgl, cdl, _ = session.run(ops, feed_dict=feed_dict)
 
         if (idx + 1) % display_step == 0:
             history_writer.add_summary(summary, idx)
             print("Step: {:5d}, GL0: {:6f}, DL0: {:6f}, "
                   "GL1: {:6f}, DL1: {:6f}, CGL: {:6f}, CDL: {:6f}".format(idx + 1, gl0, dl0, gl1, dl1, cgl, cdl))
 
-            if (idx + 1) >= 3000:
-                g0, g1 = sess.run([gen_sample0, gen_sample1], feed_dict={gen_input: z})
-                mnist0.train.concat_batch(g0)
-                # mnist1.train.concat_batch(g1)
-        if (idx+1) % 1000 == 0:
-            d = int((idx+1)/1000)
-            plot_image(sess, gen_sample0, gen_sample1, noise_dim, desired_class, sample_amount, gen_input, d)
+            # if (idx + 1) >= 3000:
+            #     g0, g1 = sess.run([gen_sample0, gen_sample1], feed_dict={gen_input: z})
+            #     mnist0.train.concat_batch(g0)
+            #     # mnist1.train.concat_batch(g1)
         if (idx+1) == 1000:
-            print("ACC of original SVM: %f " % sess.run(real_acc, feed_dict={real_image_input0: mnist0.test.images,
-                                                                             real_image_input1: mnist1.test.images,
-                                                                             disc_target_real: test_labels}))
+            print("ACC of original SVM: %f " % session.run(real_acc, feed_dict={real_image_input0: dset0.test.images,
+                                                                                real_image_input1: dset1.test.images,
+                                                                                disc_target_real: test_labels}))
+
+init = tf.global_variables_initializer()
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+with tf.Session(config=config) as sess:
+    sess.run(init)
+
+    train_all(sess, steps=training_step/2, dset0=mnist0, dset1=mnist1)
 
     print("ACC of after SVM: %f" % sess.run(real_acc, feed_dict={real_image_input0: mnist0.test.images,
                                                                  real_image_input1: mnist1.test.images,
