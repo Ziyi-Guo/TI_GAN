@@ -2,9 +2,8 @@ import os
 import dataset
 from TI_GAN import *
 import numpy as np
-from sklearn import svm
 
-os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
 # Hyper Parameters
 sample_amount = 200
@@ -18,7 +17,7 @@ alpha = 0.5
 # Network Parameters
 image_dim = 784
 noise_dim = 64
-desired_class = [8, 9]
+desired_class = [7, 9]
 
 # Data Feed
 # 784 (reshape=True) | 28*28 (reshape=False)
@@ -26,12 +25,11 @@ image_reshape = False
 data_dir = "/home/ziyi/code/data/"
 mnist0 = dataset.read_data_sets(data_dir, target_class=desired_class[0], one_hot=False,
                                 reshape=image_reshape, sample_vol=sample_amount)
-# print(mnist1.train.images.shape, mnist1.train.num_examples)
 mnist1 = dataset.read_data_sets(data_dir, target_class=desired_class[1], one_hot=False,
-                                reshape=image_reshape, sample_vol=sample_amount*10)
-
+                                reshape=image_reshape, sample_vol=sample_amount*5)
 test_images = np.concatenate([mnist0.test.images, mnist1.test.images], 0)
 test_labels = np.concatenate([np.ones(mnist0.test.num_examples), -np.ones(mnist1.test.num_examples)])
+# print(mnist1.train.images.shape, mnist1.train.num_examples)
 
 # Graph Input
 gen_input = tf.placeholder(tf.float32, [None, noise_dim])
@@ -54,6 +52,8 @@ cross_gen_loss, cross_disc_loss, real_acc = \
     cross_class_operations(gen_sample0, gen_sample1, real_image_input0,
                            real_image_input1, disc_target_real, disc_target_gen)
 
+
+# Varlist of all operations
 gen0_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator0")
 gen1_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Generator1")
 disc0_vars = tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, scope="Discriminator0")
@@ -115,11 +115,10 @@ with tf.Session(config=config) as sess:
             if (idx + 1) >= 3000:
                 g0, g1 = sess.run([gen_sample0, gen_sample1], feed_dict={gen_input: z})
                 mnist0.train.concat_batch(g0)
-                mnist1.train.concat_batch(g1)
+                # mnist1.train.concat_batch(g1)
         if (idx+1) % 1000 == 0:
             d = int((idx+1)/1000)
             plot_image(sess, gen_sample0, gen_sample1, noise_dim, desired_class, sample_amount, gen_input, d)
-
         if (idx+1) == 1000:
             print("ACC of original SVM: %f " % sess.run(real_acc, feed_dict={real_image_input0: mnist0.test.images,
                                                                              real_image_input1: mnist1.test.images,
