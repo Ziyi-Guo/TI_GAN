@@ -84,9 +84,24 @@ def train_operations(noise, image_input, disc_t, gen_t, index):
     return gen_sample, gen_loss, disc_loss
 
 
-def cross_class_operations(gen_sample0, gen_sample1, real_image0, real_image1, target_real, target_gen):
+def svm_operations(real_image0, real_image1, target_real):
     disc_scoop = "Cross_Discriminator"
     disc_real = svm(tf.concat([real_image0, real_image1], axis=0), scoop_name=disc_scoop)
+
+    # Loss Definition
+    target_real = tf.cast(target_real, tf.float32)
+    real_prediction = tf.reshape(tf.sign(disc_real)[:], [1, -1])
+    acc = tf.reduce_mean(tf.cast(tf.equal(real_prediction, target_real), tf.float32))
+
+    target_real = tf.reshape(target_real, (-1, 1))
+    loss = tf.reduce_mean(tf.maximum(0., 1. - disc_real * target_real))
+
+    return loss, acc
+
+
+def cross_class_operations(gen_sample0, gen_sample1, real_image0, real_image1, target_real, target_gen):
+    disc_scoop = "Cross_Discriminator"
+    disc_real = svm(tf.concat([real_image0, real_image1], axis=0), scoop_name=disc_scoop, reuse=True)
     disc_gen = svm(tf.concat([gen_sample0, gen_sample1], axis=0), scoop_name=disc_scoop, reuse=True)
 
     # SVM tries to minimize the classification loss on real images(Training Data)
@@ -96,14 +111,16 @@ def cross_class_operations(gen_sample0, gen_sample1, real_image0, real_image1, t
     target_real, target_gen = tf.cast(target_real, tf.float32), tf.cast(target_gen, tf.float32)
     real_prediction = tf.reshape(tf.sign(disc_real)[:], [1, -1])
     real_acc = tf.reduce_mean(tf.cast(tf.equal(real_prediction, target_real), tf.float32))
+    # pos_vol = real_image0.shape[0]
+    # pos_acc = tf.reduce_mean(tf.cast(tf.equal(real_prediction[0:pos_vol], target_real[0:pos_vol]), tf.float32))
 
     target_real, target_gen = tf.reshape(target_real, (-1, 1)), tf.reshape(target_gen, (-1, 1))
     disc_loss = tf.reduce_mean(tf.maximum(0., 1. - disc_real * target_real))
-    gen_loss =  tf.reduce_mean(tf.maximum(0., 1. - disc_gen * target_gen))
+    gen_loss = tf.reduce_mean(tf.maximum(0., 1. - disc_gen * target_gen))
     tf.summary.scalar(tensor=gen_loss, name="Generator Cross Loss")
     tf.summary.scalar(tensor=disc_loss, name=disc_scoop + " Loss")
 
-    return gen_loss, disc_loss, real_acc
+    return gen_loss, disc_loss, real_acc#, pos_acc
 
 
 def plot_image(sess, gen_sample0, gen_sample1, noise_dim, desired_class, sample_amount, gen_input, idx=None):
