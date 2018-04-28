@@ -96,7 +96,7 @@ def svm_operations(real_image0, real_image1, target_real):
     target_real = tf.reshape(target_real, (-1, 1))
     loss = tf.reduce_mean(tf.maximum(0., 1. - disc_real * target_real))
 
-    return loss, acc
+    return loss, acc, real_prediction
 
 
 def cross_class_operations(gen_sample0, gen_sample1, real_image0, real_image1, target_real, target_gen):
