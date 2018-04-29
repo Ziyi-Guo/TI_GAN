@@ -280,13 +280,21 @@ def read_data_sets(train_dir,
     train_images = train_images[validation_size:]
     train_labels = train_labels[validation_size:]
 
+    for i in range(10):
+        temp_train = train_images[train_labels == i]
+        temp_train = temp_train[0:sample_vol]
+        if i == 0:
+            train = temp_train
+        else:
+            train = numpy.vstack((train, temp_train))
+
     if target_class is not None:
         print("Target_class %d" % target_class)
-        # # Use all oppo classes as imbalanced
-        # ext_train_images = train_images[train_labels != target_class]
-        # ext_train_labels = train_labels[train_labels != target_class]
-        # ext_test_images = test_images[test_labels != target_class]
-        # ext_test_labels = test_labels[test_labels != target_class]
+        # Use all oppo classes as imbalanced
+        ext_train_images = train_images[train_labels != target_class]
+        ext_train_labels = train_labels[train_labels != target_class]
+        ext_test_images = test_images[test_labels != target_class]
+        ext_test_labels = test_labels[test_labels != target_class]
 
         train_images = train_images[train_labels == target_class]
         train_labels = train_labels[train_labels == target_class]
@@ -305,14 +313,14 @@ def read_data_sets(train_dir,
     validation = DataSet(validation_images, validation_labels, **options)
     test = DataSet(test_images, test_labels, **options)
 
-    # ext_train = DataSet(ext_train_images, ext_train_labels, **options)
-    # ext_test = DataSet(ext_test_images, ext_test_labels, **options)
-    # ext_validation = DataSet(validation_images, validation_labels, **options)
+    ext_train = DataSet(ext_train_images, ext_train_labels, **options)
+    ext_test = DataSet(ext_test_images, ext_test_labels, **options)
+    ext_validation = DataSet(validation_images, validation_labels, **options)
 
     target_dataset = base.Datasets(train=train, validation=validation, test=test)
-    # oppo_dataset = base.Datasets(train=ext_train, validation=ext_validation, test=ext_test)
+    oppo_dataset = base.Datasets(train=ext_train, validation=ext_validation, test=ext_test)
 
-    return target_dataset#, oppo_dataset
+    return target_dataset, oppo_dataset
 
 
 def load_mnist(train_dir='MNIST-data'):
